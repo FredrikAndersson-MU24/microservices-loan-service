@@ -38,4 +38,15 @@ public class LoanController {
                 ).orElse(Mono.empty());
     }
 
+    @PutMapping("/return/{loanId}")
+    public Loan returnLoan(@PathVariable Long loanId) {
+        Loan loan = loanRepository.findById(loanId).orElse(null);
+        if (loan != null) {
+            loan.setReturned(true);
+            bookClient.put()
+                    .uri("/book/" + loan.getBookId() + "/true").retrieve().toBodilessEntity().block();
+            return loanRepository.save(loan);
+        } else throw new EntityNotFoundException("Loan ID not found");
+
+    }
 }
