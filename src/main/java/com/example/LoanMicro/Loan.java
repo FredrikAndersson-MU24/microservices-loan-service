@@ -24,7 +24,7 @@ public class Loan {
 
     private Long bookId;
 
-    private boolean availability;
+    private boolean returned;
 
     private String borrowerName;
 
