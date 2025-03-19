@@ -1,9 +1,13 @@
 package com.example.LoanMicro;
 
+import jakarta.persistence.EntityNotFoundException;
+import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
+
+import java.rmi.ServerException;
 
 @RestController
 @RequestMapping("/loans")
@@ -20,8 +24,11 @@ public class LoanController {
     @PostMapping
     public Loan createLoan(@RequestBody Loan loan) {
         bookClient.put()
-                .uri("/book/" + loan.getBookId() + "/false").retrieve().toBodilessEntity().block();
-        System.out.println("/book/" + loan.getBookId() + "/false");
+                .uri("/book/" + loan.getBookId() + "/false")
+                .retrieve()
+                .onStatus(HttpStatusCode::is4xxClientError, response -> response.bodyToMono(String.class).map(EntityNotFoundException::new))
+                .onStatus(HttpStatusCode::is5xxServerError, response -> response.bodyToMono(String.class).map(ServerException::new))
+                .toBodilessEntity().block();
         return loanRepository.save(loan);
     }
 
