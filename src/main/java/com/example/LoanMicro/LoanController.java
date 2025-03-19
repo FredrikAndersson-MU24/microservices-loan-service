@@ -37,18 +37,5 @@ public class LoanController {
                                         new LoanResponseDTO(loan, book))
                 ).orElse(Mono.empty());
     }
-    @PutMapping("/{id}")
-    public Mono<ResponseEntity<String>> returnBook(@PathVariable Long id){
-        return loanRepository.findById(id).flatMap(loan -> {
-            return bookClient.put().uri("/books/" + loan.getBookId() + "/true")
-                    .retrieve()
-                    .toBodilessEntity()
-                    .then(loanRepository.delete(loan))
-                    .thenReturn(ResponseEntity.ok("Book returned"));
-        })
-                .defaultIfEmpty(ResponseEntity.notFound().build());
-    }
-
-
 
 }
