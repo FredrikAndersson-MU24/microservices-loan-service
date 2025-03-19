@@ -30,7 +30,7 @@ public class LoanController {
         return loanRepository.findById(id)
                 .map(loan ->
                         bookClient.get()
-                                .uri("/books/" + loan.getLoanId())
+                                .uri("/book/" + loan.getBookId())
                                 .retrieve()
                                 .bodyToMono(Book.class)
                                 .map(book ->
