@@ -1,13 +1,12 @@
 package com.example.LoanMicro;
 
 import jakarta.persistence.EntityNotFoundException;
+import org.apache.coyote.BadRequestException;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
-
-import java.rmi.ServerException;
 
 @RestController
 @RequestMapping("/loans")
@@ -24,36 +23,48 @@ public class LoanController {
     @PostMapping
     public Loan createLoan(@RequestBody Loan loan) {
         bookClient.put()
-                .uri("/book/" + loan.getBookId() + "/false")
+                .uri("/book/loan/" + loan.getBookId())
                 .retrieve()
-                .onStatus(HttpStatusCode::is4xxClientError, response -> response.bodyToMono(String.class).map(EntityNotFoundException::new))
-                .onStatus(HttpStatusCode::is5xxServerError, response -> response.bodyToMono(String.class).map(ServerException::new))
-                .toBodilessEntity().block();
+                .onStatus(HttpStatusCode.valueOf(404)::equals, _ -> Mono.error(new EntityNotFoundException("Book ID not found (response from book) (from loan)")))
+                .onStatus(HttpStatus.BAD_REQUEST::equals, _ -> Mono.error(new BadRequestException("Book is not available (response from book)(from loan) ")))
+                .toBodilessEntity()
+                .block();
         return loanRepository.save(loan);
     }
 
     @GetMapping("/{id}")
     public Mono<LoanResponseDTO> getLoanById(@PathVariable Long id) {
-        return loanRepository.findById(id)
-                .map(loan ->
-                        bookClient.get()
-                                .uri("/book/" + loan.getBookId())
-                                .retrieve()
-                                .bodyToMono(Book.class)
-                                .map(book ->
-                                        new LoanResponseDTO(loan, book))
-                ).orElse(Mono.empty());
+        boolean exists = loanRepository.existsById(id);
+        if (exists) {
+            return loanRepository.findById(id)
+                    .map(loan ->
+                            bookClient.get()
+                                    .uri("/book/" + loan.getBookId())
+                                    .retrieve()
+                                    .bodyToMono(Book.class)
+                                    .map(book ->
+                                            new LoanResponseDTO(loan, book))
+                    ).orElse(Mono.empty());
+        } else throw new EntityNotFoundException("Loan ID not found");
     }
 
     @PutMapping("/return/{loanId}")
-    public Loan returnLoan(@PathVariable Long loanId) {
+    public Loan returnLoan(@PathVariable Long loanId) throws BadRequestException {
         Loan loan = loanRepository.findById(loanId).orElse(null);
         if (loan != null) {
+            if (loan.isReturned()) {
+                throw new BadRequestException("Loan ID " + loan.getLoanId() + " is already returned!");
+            }
             loan.setReturned(true);
             bookClient.put()
-                    .uri("/book/" + loan.getBookId() + "/true").retrieve().toBodilessEntity().block();
+                    .uri("/book/return/" + loan.getBookId())
+                    .retrieve()
+                    .onStatus(HttpStatusCode.valueOf(404)::equals, _ -> Mono.error(new EntityNotFoundException("Book ID not found (response from book) (from loan)")))
+                    .onStatus(HttpStatus.BAD_REQUEST::equals, _ -> Mono.error(new BadRequestException("Book is not available (response from book)(from loan) ")))
+                    .toBodilessEntity()
+                    .block();
             return loanRepository.save(loan);
         } else throw new EntityNotFoundException("Loan ID not found");
-
     }
+
 }
